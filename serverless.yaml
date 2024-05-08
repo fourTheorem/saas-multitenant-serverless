@@ -1,0 +1,143 @@
+service: saas-api
+frameworkVersion: '3'
+
+plugins:
+  - serverless-iam-roles-per-function
+
+provider:
+  name: aws
+  region: ${opt:region, 'eu-west-1'}
+  stage: ${opt:stage, 'dev'}
+  runtime: nodejs20.x
+  httpApi:
+    authorizers:
+      defaultAuthorizer:
+        type: request
+        functionName: authorizer
+
+functions:
+  api:
+    handler: src/api/index.handler
+    # iamRoleStatements:
+    #   - Effect: Allow
+    #     Action:
+    #       - dynamodb:GetItem
+    #       - dynamodb:Query
+    #     Resource:
+    #       - !GetAtt ProductsTable.Arn
+    #     Condition:
+    #       StringEquals:
+    #         dynamodb:LeadingKeys:
+    #           - Fn::Join:
+    #               - ''
+    #               - - "$"
+    #                 - "{aws:PrincipalTag/TenantId}"
+    events:
+      - httpApi:
+          path: /
+          method: get
+          authorizer:
+            name: defaultAuthorizer
+
+  authorizer:
+    handler: src/authorizer.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - sts:AssumeRole
+        Resource:
+          - !GetAtt AuthorizerAccessRole.Arn
+
+resources:
+  Resources:
+    # https://github.com/aws-samples/aws-saas-factory-ref-solution-serverless-saas/blob/ab959c8c02d81f05fb85c6ed140bbb12e914a84c/server/nested_templates/bootstrap/lambdafunctions.yaml#L68
+    AuthorizerExecutionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: authorizer-execution-role
+        Path: '/'
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        # Policies:
+        #   - PolicyName: authrorizer-execution-policy
+        #     PolicyDocument:
+        #       Version: '2012-10-17'
+        #       Statement:
+        #         - Effect: Allow
+        #           Action:
+        #             - dynamodb:GetItem
+        #           Resource:
+        #             # https://github.com/aws-samples/aws-saas-factory-ref-solution-serverless-saas/blob/ab959c8c02d81f05fb85c6ed140bbb12e914a84c/server/nested_templates/bootstrap/tables.yaml#L35
+        #             - !Ref: TenantDetailsTable
+
+    # https://github.com/aws-samples/aws-saas-factory-ref-solution-serverless-saas/blob/ab959c8c02d81f05fb85c6ed140bbb12e914a84c/server/nested_templates/bootstrap/lambdafunctions.yaml#L101
+    AuthorizerAccessRole:
+      Type: AWS::IAM::Role
+      DependsOn: AuthorizerExecutionRole
+      Properties:
+        RoleName: authorizer-access-role
+        Path: '/'
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                AWS: '*'
+                  # - !GetAtt AuthorizerExecutionRole.Arn
+              Action:
+                - sts:AssumeRole
+            # https://aws.amazon.com/blogs/security/how-to-implement-saas-tenant-isolation-with-abac-and-aws-iam/
+            - Effect: Allow
+              Principal:
+                AWS: '*'
+              Action:
+                - sts:TagSession
+              Condition:
+                StringLike:
+                  aws:RequestTag/TenantId: '*'
+        Policies:
+          - PolicyName: authorizer-access-role-policy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:BatchGetItem
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:UpdateItem
+                    - dynamodb:Query
+                    - dynamodb:Scan
+                  Resource:
+                    - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*
+                  # Condition:
+                  #   StringEquals:
+                  #     dynamodb:LeadingKeys:
+                  #       - Fn::Join:
+                  #           - ''
+                  #           - - "$"
+                  #             - "{aws:PrincipalTag/TenantId}"
+
+    ProductsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: saas-products-${self:provider.stage}
+        AttributeDefinitions:
+          - AttributeName: tenant
+            AttributeType: S
+          - AttributeName: productId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: tenant
+            KeyType: HASH
+          - AttributeName: productId
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
