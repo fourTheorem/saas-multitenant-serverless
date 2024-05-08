@@ -14,15 +14,17 @@ export async function handler(event, context) {
       Statement: [
         {
           Effect: 'Allow',
-          Action: 'dynamodb:Query',
+          Action: [
+            'dynamodb:Query',
+          ],
           Resource: 'arn:aws:dynamodb:eu-west-1:629383401309:table/saas-products-dev',
-          // Condition: {
-          //   StringEquals: {
-          //     'dynamodb:LeadingKeys': [
-          //       '${aws:PrincipalTag/TenantId}',
-          //     ],
-          //   },
-          // },
+          Condition: {
+            'ForAllValues:StringEquals': {
+              'dynamodb:LeadingKeys': [
+                '${aws:PrincipalTag/TenantId}',
+              ],
+            },
+          },
         },
       ],
     }),

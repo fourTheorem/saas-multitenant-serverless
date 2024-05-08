@@ -27,6 +27,7 @@ export async function handler(event, context) {
     return {
       statusCode: 200,
       body: JSON.stringify({
+        tenant,
         message: 'Hello World',
         products: response.Items,
       }),
@@ -35,6 +36,7 @@ export async function handler(event, context) {
     return {
       statusCode: 400,
       body: JSON.stringify({
+        tenant,
         message: 'Error',
         error: error,
       }),

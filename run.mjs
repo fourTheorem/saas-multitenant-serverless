@@ -56,7 +56,7 @@ try {
     TableName: 'saas-products-dev',
     KeyConditionExpression: 'tenant = :tenant',
     ExpressionAttributeValues: {
-      ':tenant': 'test',
+      ':tenant': 'chicken',
     },
   }));
 
