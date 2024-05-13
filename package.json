@@ -16,6 +16,9 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.569.0",
     "@aws-sdk/client-sts": "^3.567.0",
-    "@aws-sdk/lib-dynamodb": "^3.569.0"
+    "@aws-sdk/lib-dynamodb": "^3.569.0",
+    "aws-api-auth-policy": "^1.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "jwks-rsa": "^3.1.0"
   }
 }

@@ -1,18 +1,13 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 
-export async function handler(event, context) {
+export async function handler(event) {
   console.log('event: ', event);
 
-  const credentials = event.requestContext.authorizer.lambda.credentials;
-  const tenant = event.queryStringParameters.tenant ?? 'default';
+  const context = event.requestContext.authorizer.lambda;
 
   const ddbClient = new DynamoDBClient({
-    credentials: {
-      accessKeyId: credentials.AccessKeyId,
-      secretAccessKey: credentials.SecretAccessKey,
-      sessionToken: credentials.SessionToken,
-    },
+    credentials: context.credentials,
   });
 
   try {
@@ -20,25 +15,28 @@ export async function handler(event, context) {
       TableName: 'saas-products-dev',
       KeyConditionExpression: 'tenant = :tenant',
       ExpressionAttributeValues: {
-        ':tenant': tenant,
+        ':tenant': context.tenant,
       },
     }));
 
     return {
       statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
-        tenant,
-        message: 'Hello World',
         products: response.Items,
       }),
     };
   } catch (error) {
     return {
       statusCode: 400,
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
-        tenant,
         message: 'Error',
-        error: error,
+        error,
       }),
     };
   }

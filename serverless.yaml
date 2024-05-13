@@ -41,6 +41,10 @@ functions:
 
   authorizer:
     handler: src/authorizer.handler
+    environment:
+      COGNITO_USER_POOL_ID: !Ref UserPool
+      ASSUME_ROLE_ARN: !GetAtt AuthorizerAccessRole.Arn
+      PRODUCTS_TABLE_ARN: !GetAtt ProductsTable.Arn
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -50,6 +54,66 @@ functions:
 
 resources:
   Resources:
+    UserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: saas-user-pool-${self:provider.stage}
+        UsernameAttributes: [email]
+        AutoVerifiedAttributes: [email]
+        AdminCreateUserConfig:
+          AllowAdminCreateUserOnly: false
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 6
+            RequireLowercase: false
+            RequireUppercase: false
+            RequireNumbers: false
+            RequireSymbols: false
+        Schema:
+          - AttributeDataType: String
+            # NOTE! These attributes are mutable, meaning they can be changed after the user profile is created
+            # This does not mean that they can be written by the user on sign-up. That is governed by the
+            # App Client attribute write settings (User Pool Client) which make them read-only by default!
+            # (https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-settings-attributes.html#user-pool-settings-attribute-permissions-and-scopes)
+            Mutable: true
+            Name: tenant
+            StringAttributeConstraints:
+              MinLength: 3
+              MaxLength: 16
+
+    UserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: saas-user-pool-client-${self:provider.stage}
+        ExplicitAuthFlows:
+          - ALLOW_USER_SRP_AUTH
+          - ALLOW_ADMIN_USER_PASSWORD_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+          - ALLOW_USER_PASSWORD_AUTH
+        GenerateSecret: true
+        RefreshTokenValidity: 30
+        SupportedIdentityProviders: [COGNITO]
+        WriteAttributes: [email]
+        CallbackURLs:
+          - http://localhost
+          - https://oauth.pstmn.io/v1/callback
+        DefaultRedirectURI: http://localhost
+        AllowedOAuthFlowsUserPoolClient: true
+        AllowedOAuthFlows:
+          - code
+        AllowedOAuthScopes:
+          - openid
+          - profile
+          - email
+        UserPoolId:
+          Ref: UserPool
+
+    UserPoolDomain:
+      Type: AWS::Cognito::UserPoolDomain
+      Properties:
+        Domain: saas-login
+        UserPoolId: !Ref UserPool
+
     # https://github.com/aws-samples/aws-saas-factory-ref-solution-serverless-saas/blob/ab959c8c02d81f05fb85c6ed140bbb12e914a84c/server/nested_templates/bootstrap/lambdafunctions.yaml#L68
     AuthorizerExecutionRole:
       Type: AWS::IAM::Role
@@ -118,13 +182,6 @@ resources:
                     - dynamodb:Scan
                   Resource:
                     - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*
-                  # Condition:
-                  #   StringEquals:
-                  #     dynamodb:LeadingKeys:
-                  #       - Fn::Join:
-                  #           - ''
-                  #           - - "$"
-                  #             - "{aws:PrincipalTag/TenantId}"
 
     ProductsTable:
       Type: AWS::DynamoDB::Table
@@ -141,3 +198,30 @@ resources:
           - AttributeName: productId
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
+
+  Outputs:
+    UserPoolId:
+      Value: !Ref UserPool
+      Export:
+        Name: saas-user-pool-id-${self:provider.stage}
+    UserPoolArn:
+      Value: !GetAtt UserPool.Arn
+      Export:
+        Name: saas-user-pool-arn-${self:provider.stage}
+    UserPoolClient:
+      Value: !Ref UserPoolClient
+      Export:
+        Name: saas-user-pool-client-id-${self:provider.stage}
+    UserPoolProviderUrl:
+      Value: !GetAtt UserPool.ProviderURL
+      Export:
+        Name: saas-user-pool-provider-url-${self:provider.stage}
+    ApiGatewayEndpoint:
+      Value:
+        Fn::Join:
+          - ""
+          - - "https://"
+            - Ref: HttpApi
+            - ".execute-api.${self:provider.region}.amazonaws.com"
+      Export:
+        Name: saas-api-gateway-endpoint-${self:provider.stage}
