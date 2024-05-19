@@ -1,9 +1,6 @@
 service: saas-api
 frameworkVersion: '3'
 
-plugins:
-  - serverless-iam-roles-per-function
-
 provider:
   name: aws
   region: ${opt:region, 'eu-west-1'}
@@ -18,20 +15,6 @@ provider:
 functions:
   api:
     handler: src/api/index.handler
-    # iamRoleStatements:
-    #   - Effect: Allow
-    #     Action:
-    #       - dynamodb:GetItem
-    #       - dynamodb:Query
-    #     Resource:
-    #       - !GetAtt ProductsTable.Arn
-    #     Condition:
-    #       StringEquals:
-    #         dynamodb:LeadingKeys:
-    #           - Fn::Join:
-    #               - ''
-    #               - - "$"
-    #                 - "{aws:PrincipalTag/TenantId}"
     events:
       - httpApi:
           path: /
@@ -114,7 +97,6 @@ resources:
         Domain: saas-login
         UserPoolId: !Ref UserPool
 
-    # https://github.com/aws-samples/aws-saas-factory-ref-solution-serverless-saas/blob/ab959c8c02d81f05fb85c6ed140bbb12e914a84c/server/nested_templates/bootstrap/lambdafunctions.yaml#L68
     AuthorizerExecutionRole:
       Type: AWS::IAM::Role
       Properties:
@@ -129,19 +111,7 @@ resources:
                   - lambda.amazonaws.com
               Action:
                 - sts:AssumeRole
-        # Policies:
-        #   - PolicyName: authrorizer-execution-policy
-        #     PolicyDocument:
-        #       Version: '2012-10-17'
-        #       Statement:
-        #         - Effect: Allow
-        #           Action:
-        #             - dynamodb:GetItem
-        #           Resource:
-        #             # https://github.com/aws-samples/aws-saas-factory-ref-solution-serverless-saas/blob/ab959c8c02d81f05fb85c6ed140bbb12e914a84c/server/nested_templates/bootstrap/tables.yaml#L35
-        #             - !Ref: TenantDetailsTable
 
-    # https://github.com/aws-samples/aws-saas-factory-ref-solution-serverless-saas/blob/ab959c8c02d81f05fb85c6ed140bbb12e914a84c/server/nested_templates/bootstrap/lambdafunctions.yaml#L101
     AuthorizerAccessRole:
       Type: AWS::IAM::Role
       DependsOn: AuthorizerExecutionRole
@@ -153,11 +123,9 @@ resources:
           Statement:
             - Effect: Allow
               Principal:
-                AWS: '*'
-                  # - !GetAtt AuthorizerExecutionRole.Arn
+                AWS: !GetAtt AuthorizerExecutionRole.Arn
               Action:
                 - sts:AssumeRole
-            # https://aws.amazon.com/blogs/security/how-to-implement-saas-tenant-isolation-with-abac-and-aws-iam/
             - Effect: Allow
               Principal:
                 AWS: '*'

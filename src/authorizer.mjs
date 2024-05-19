@@ -17,11 +17,10 @@ const jwksClient = JwksRsa({
 export async function handler(event, context) {
   console.log('event: ', event);
 
-  const accountId = event.requestContext.accountId;
   const accessToken = extractAccessToken(event.headers);
-  const session = await validateJwt(jwksClient, accessToken);
+  const claims = await validateJwt(jwksClient, accessToken);
 
-  const response = await stsClient.send(new AssumeRoleCommand({
+  const session = await stsClient.send(new AssumeRoleCommand({
     RoleArn: ASSUME_ROLE_ARN,
     RoleSessionName: 'authorizer-session',
     DurationSeconds: 900,
@@ -47,31 +46,28 @@ export async function handler(event, context) {
     Tags: [
       {
         Key: 'TenantId',
-        Value: session['custom:tenant'],
+        Value: claims['custom:tenant'],
       },
     ],
   }));
 
-  const authPolicy = new AuthPolicy(session.email, accountId, {
+  const authPolicy = new AuthPolicy(claims.email, event.requestContext.accountId, {
     region: REGION,
     restApiId: event.requestContext.apiId,
   });
 
   authPolicy.allowMethod(authPolicy.HttpVerb.GET, '/');
 
-  const policy = authPolicy.build();
-
   return {
-    ...policy,
+    ...authPolicy.build(),
     context: {
-      tenant: session['custom:tenant'],
+      tenant: claims['custom:tenant'],
       credentials: {
-        accessKeyId: response.Credentials.AccessKeyId,
-        secretAccessKey: response.Credentials.SecretAccessKey,
-        sessionToken: response.Credentials.SessionToken,
+        accessKeyId: session.Credentials.AccessKeyId,
+        secretAccessKey: session.Credentials.SecretAccessKey,
+        sessionToken: session.Credentials.SessionToken,
       },
     },
-    // apiKey: '12346'
   };
 }
 

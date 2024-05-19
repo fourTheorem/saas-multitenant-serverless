@@ -2,8 +2,6 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 export async function handler(event) {
-  console.log('event: ', event);
-
   const context = event.requestContext.authorizer.lambda;
 
   const ddbClient = new DynamoDBClient({
